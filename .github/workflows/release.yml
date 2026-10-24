@@ -72,7 +72,7 @@ jobs:
       - name: Install build tools
         run: |
           python3 -m venv .venv-build
-          .venv-build/bin/pip install build requests
+          .venv-build/bin/pip install build requests setuptools setuptools_scm
 
       - name: Build release
         env:
