@@ -9,10 +9,11 @@ from urllib.parse import unquote
 BUILD = "3.13.9"
 DATE = "20251014"
 CPYTHON_BUILD = f"cpython-{BUILD}"
+PYTHON_TARGET = os.environ.get("DZGUI_PYTHON_TARGET", "x86_64-unknown-linux-gnu")
 
 root = Path(__file__).resolve().parents[1]
 build_dir = root.joinpath("build")
-cpython_dir = build_dir.joinpath(CPYTHON_BUILD)
+cpython_dir = build_dir.joinpath(f"{CPYTHON_BUILD}-{PYTHON_TARGET}")
 
 
 def fetch(url: str, destination: str) -> None:
@@ -27,12 +28,11 @@ def fetch(url: str, destination: str) -> None:
 
 def get_cpython() -> None:
     source = f"https://github.com/astral-sh/python-build-standalone/releases/download/{DATE}/"
-    build = f"{CPYTHON_BUILD}%2B{DATE}-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
+    build = f"{CPYTHON_BUILD}%2B{DATE}-{PYTHON_TARGET}-install_only_stripped.tar.gz"
     url = f"{source}{build}"
     outfile = unquote(build)
     fetch(url, outfile)
-    version = build.split("%")[0]
-    untar(outfile, "python", version)
+    untar(outfile, "python", cpython_dir.name)
 
 
 def get_pyapp() -> None:
@@ -52,7 +52,7 @@ def untar(file: str, glob: str, renamed: str) -> None:
 
 
 def install_deps() -> None:
-    pip = build_dir.joinpath(f"{CPYTHON_BUILD}/bin/pip")
+    pip = cpython_dir.joinpath("bin/pip")
     proc = subprocess.run([pip, "install", root])
     return proc.returncode
 
@@ -61,7 +61,7 @@ def repackage() -> None:
     print("Preparing tar archive...")
     outfile = build_dir.joinpath("airgapped.tar.gz")
     with tarfile.open(outfile, "w:gz") as tar:
-        tar.add(build_dir.joinpath(CPYTHON_BUILD), arcname="python")
+        tar.add(cpython_dir, arcname="python")
 
 
 def rebuild_cpython() -> None:

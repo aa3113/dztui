@@ -1,0 +1,108 @@
+name: Build and publish release
+
+on:
+  push:
+    branches:
+      - feat/aarch64-release
+    tags:
+      - "v*"
+      - "[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            python_target: x86_64-unknown-linux-gnu
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            python_target: aarch64-unknown-linux-gnu
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            gobject-introspection \
+            libcairo2-dev \
+            libffi-dev \
+            libgirepository-2.0-dev \
+            libgirepository1.0-dev \
+            libglib2.0-dev \
+            musl-tools \
+            pkg-config \
+            python3 \
+            python3-pip \
+            python3-venv
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Configure musl linker
+        run: |
+          target=$(echo "${{ matrix.target }}" | tr '[:lower:]-' '[:upper:]_')
+          cc=$(echo "${{ matrix.target }}" | tr '-' '_')
+          echo "CARGO_TARGET_${target}_LINKER=musl-gcc" >> "$GITHUB_ENV"
+          echo "CC_${cc}=musl-gcc" >> "$GITHUB_ENV"
+
+      - name: Install build tools
+        run: |
+          python3 -m venv .venv-build
+          .venv-build/bin/pip install build requests
+
+      - name: Build release
+        env:
+          DZGUI_TARGET: ${{ matrix.target }}
+          DZGUI_PYTHON_TARGET: ${{ matrix.python_target }}
+        run: .venv-build/bin/python scripts/release.py
+
+      - name: Upload release tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: dzgui-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download release tarballs
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: dist/*.tar.gz
+          fail_on_unmatched_files: true
+          generate_release_notes: true

@@ -53,7 +53,7 @@ env["PYAPP_FULL_ISOLATION"] = "true"
 env["PYAPP_DISTRIBUTION_PATH"] = str(cpython)
 env["PYAPP_DISTRIBUTION_PYTHON_PATH"] = "python/bin/python3"
 
-platform = "x86_64-unknown-linux-musl"
+platform = os.environ.get("DZGUI_TARGET", "x86_64-unknown-linux-musl")
 build_name = f"{appname}-{version}-{platform}"
 tarname = f"{build_name}.tar.gz"
 tarpath = dist_dir.joinpath(tarname)
